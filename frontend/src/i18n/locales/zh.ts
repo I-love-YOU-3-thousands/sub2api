@@ -919,6 +919,7 @@ export default {
     resetView: '重置视图',
     close: '关闭',
     loadMore: '加载更多',
+    localHistoryHint: '历史记录和图片保存在当前浏览器本地',
     delete: '删除',
     deleteConfirm: '确定删除这个生图任务吗？',
     deleteFailed: '删除生图任务失败',

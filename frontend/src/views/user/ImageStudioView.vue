@@ -58,7 +58,9 @@
 
             <div>
               <label class="input-label" for="image-studio-model">{{ t('imageStudio.model') }}</label>
-              <input id="image-studio-model" v-model.trim="model" class="input" type="text" />
+              <select id="image-studio-model" v-model="model" class="input">
+                <option v-for="item in modelOptions" :key="item" :value="item">{{ item }}</option>
+              </select>
             </div>
 
             <div>
@@ -169,7 +171,7 @@
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('imageStudio.history') }}</h2>
               <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">{{ t('imageStudio.historySubtitle') }}</p>
             </div>
-            <button class="btn btn-secondary btn-icon" :disabled="loadingTasks" :title="t('imageStudio.refresh')" @click="loadTasks(true)">
+            <button class="btn btn-secondary btn-icon" :disabled="loadingTasks" :title="t('imageStudio.refresh')" @click="loadLocalTasks">
               <Icon name="refresh" size="md" :class="loadingTasks ? 'animate-spin' : ''" />
             </button>
           </div>
@@ -290,11 +292,8 @@
               </div>
             </article>
 
-            <div v-if="canLoadMore" class="p-5 text-center">
-              <button class="btn btn-secondary" :disabled="loadingMore" @click="loadTasks(false)">
-                <Icon name="refresh" size="sm" :class="loadingMore ? 'animate-spin' : ''" />
-                <span>{{ t('imageStudio.loadMore') }}</span>
-              </button>
+            <div class="p-5 text-center text-xs text-gray-500 dark:text-dark-400">
+              {{ t('imageStudio.localHistoryHint') }}
             </div>
           </div>
         </section>
@@ -443,15 +442,28 @@ import imageStudioAPI, {
   type ImageStudioTask
 } from '@/api/imageStudio'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage } from '@/utils/apiError'
+import {
+  deleteLocalImageStudioTaskAssets,
+  loadLocalImageStudioAssetBlob,
+  loadLocalImageStudioHistory,
+  mergeLocalImageStudioTask,
+  saveLocalImageStudioAssetBlob,
+  saveLocalImageStudioHistory,
+  type LocalImageStudioTask,
+  type StoredImageStudioAsset
+} from '@/utils/imageStudioLocalHistory'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 const ratios = ['1:1', '3:2', '2:3', '4:3', '3:4', '5:4', '4:5', '16:9', '9:16', '21:9'] as const
 const resolutions = ['1K', '2K', '4K'] as const
 const qualities = ['high', 'medium', 'low', 'auto'] as const
 const counts = [1, 2, 3, 4] as const
+const modelOptions = ['gpt-image-2'] as const
 
 const modeOptions: Array<{ value: ImageStudioMode; labelKey: string; icon: 'sparkles' | 'upload' }> = [
   { value: 'text_to_image', labelKey: 'imageStudio.modes.textToImage', icon: 'sparkles' },
@@ -472,12 +484,9 @@ const referencePreviewUrl = ref('')
 const referenceInput = ref<HTMLInputElement | null>(null)
 const formError = ref('')
 
-const tasks = ref<ImageStudioTask[]>([])
-const currentPage = ref(1)
-const totalPages = ref(1)
+const tasks = ref<LocalImageStudioTask[]>([])
 const loadingKeys = ref(false)
 const loadingTasks = ref(false)
-const loadingMore = ref(false)
 const submitting = ref(false)
 const optimizingPrompt = ref(false)
 const deletingTaskIDs = ref<Record<string, boolean>>({})
@@ -490,8 +499,8 @@ const promptOptimization = ref({
   variant: 0
 })
 const imageViewer = ref({
-  task: null as ImageStudioTask | null,
-  asset: null as ImageStudioAsset | null,
+  task: null as LocalImageStudioTask | null,
+  asset: null as StoredImageStudioAsset | null,
   url: '',
   scale: 1,
   translateX: 0,
@@ -503,13 +512,12 @@ const imageViewer = ref({
   startTranslateY: 0
 })
 
-const pageSize = 20
 const loadingAssetIDs = new Set<number>()
 const viewerMinScale = 0.25
 const viewerMaxScale = 5
 let pollTimer: number | undefined
 
-const canLoadMore = computed(() => currentPage.value < totalPages.value)
+const localHistoryOwnerID = computed(() => authStore.user?.id ?? 'anonymous')
 const imageViewerScaleLabel = computed(() => `${Math.round(imageViewer.value.scale * 100)}%`)
 const imageViewerTitle = computed(() => {
   const asset = imageViewer.value.asset
@@ -522,7 +530,8 @@ const imageViewerImageStyle = computed(() => ({
 }))
 
 async function refreshAll() {
-  await Promise.all([loadKeys(), loadTasks(true)])
+  loadLocalTasks()
+  await loadKeys()
 }
 
 async function loadKeys() {
@@ -541,30 +550,14 @@ async function loadKeys() {
   }
 }
 
-async function loadTasks(reset = true) {
-  if (reset) {
-    loadingTasks.value = true
-  } else {
-    loadingMore.value = true
-  }
+function loadLocalTasks() {
+  loadingTasks.value = true
   try {
-    const nextPage = reset ? 1 : currentPage.value + 1
-    const result = await imageStudioAPI.listTasks(nextPage, pageSize)
-    if (reset) {
-      tasks.value = result.items
-    } else {
-      const existingIDs = new Set(tasks.value.map((task) => task.task_id))
-      tasks.value = [...tasks.value, ...result.items.filter((task) => !existingIDs.has(task.task_id))]
-    }
-    currentPage.value = result.page
-    totalPages.value = result.pages || 1
-    hydrateAssetsForTasks(result.items)
+    tasks.value = loadLocalImageStudioHistory(localHistoryOwnerID.value)
+    hydrateAssetsForTasks(tasks.value)
     syncPolling()
-  } catch (err: unknown) {
-    appStore.showError(extractApiErrorMessage(err, t('imageStudio.loadFailed')))
   } finally {
     loadingTasks.value = false
-    loadingMore.value = false
   }
 }
 
@@ -690,12 +683,15 @@ function clearReference() {
 
 function upsertTask(task: ImageStudioTask) {
   const index = tasks.value.findIndex((item) => item.task_id === task.task_id)
+  const localTask = mergeLocalImageStudioTask(index >= 0 ? tasks.value[index] : undefined, task)
   if (index >= 0) {
-    tasks.value.splice(index, 1, task)
+    tasks.value.splice(index, 1, localTask)
   } else {
-    tasks.value.unshift(task)
+    tasks.value.unshift(localTask)
   }
-  hydrateAssetsForTasks([task])
+  tasks.value = tasks.value.slice(0, 100)
+  saveLocalTasks()
+  hydrateAssetsForTasks([localTask])
   syncPolling()
 }
 
@@ -741,16 +737,17 @@ function stopPolling() {
   pollTimer = undefined
 }
 
-async function handleDelete(task: ImageStudioTask) {
+async function handleDelete(task: LocalImageStudioTask) {
   if (!window.confirm(t('imageStudio.deleteConfirm'))) return
   deletingTaskIDs.value = { ...deletingTaskIDs.value, [task.task_id]: true }
   try {
-    await imageStudioAPI.deleteTask(task.task_id)
     if (imageViewer.value.task?.task_id === task.task_id) {
       closeImageViewer()
     }
     revokeAssetUrls(task.assets)
     tasks.value = tasks.value.filter((item) => item.task_id !== task.task_id)
+    saveLocalTasks()
+    await deleteLocalImageStudioTaskAssets(task)
     syncPolling()
     appStore.showSuccess(t('imageStudio.deleted'))
   } catch (err: unknown) {
@@ -762,7 +759,7 @@ async function handleDelete(task: ImageStudioTask) {
   }
 }
 
-function hydrateAssetsForTasks(sourceTasks: ImageStudioTask[]) {
+function hydrateAssetsForTasks(sourceTasks: LocalImageStudioTask[]) {
   for (const task of sourceTasks) {
     for (const asset of task.assets || []) {
       void loadAssetUrl(asset)
@@ -770,11 +767,15 @@ function hydrateAssetsForTasks(sourceTasks: ImageStudioTask[]) {
   }
 }
 
-async function loadAssetUrl(asset: ImageStudioAsset) {
+async function loadAssetUrl(asset: StoredImageStudioAsset) {
   if (assetObjectUrls.value[asset.id] || loadingAssetIDs.has(asset.id)) return
   loadingAssetIDs.add(asset.id)
   try {
-    const blob = await imageStudioAPI.fetchAssetBlob(asset.id)
+    let blob = await loadLocalImageStudioAssetBlob(asset)
+    if (!blob) {
+      blob = await imageStudioAPI.fetchAssetBlob(asset.id)
+      await saveLocalImageStudioAssetBlob(asset, blob)
+    }
     assetObjectUrls.value = {
       ...assetObjectUrls.value,
       [asset.id]: window.URL.createObjectURL(blob)
@@ -784,6 +785,10 @@ async function loadAssetUrl(asset: ImageStudioAsset) {
   } finally {
     loadingAssetIDs.delete(asset.id)
   }
+}
+
+function saveLocalTasks() {
+  saveLocalImageStudioHistory(tasks.value, localHistoryOwnerID.value)
 }
 
 function revokeAssetUrls(assets: ImageStudioAsset[]) {
@@ -798,7 +803,7 @@ function revokeAssetUrls(assets: ImageStudioAsset[]) {
   assetObjectUrls.value = next
 }
 
-function openImageViewer(task: ImageStudioTask, asset: ImageStudioAsset) {
+function openImageViewer(task: LocalImageStudioTask, asset: StoredImageStudioAsset) {
   const url = assetObjectUrls.value[asset.id]
   if (!url) return
   imageViewer.value = {
@@ -895,7 +900,7 @@ function downloadImageViewerAsset() {
   downloadAsset(imageViewer.value.task, imageViewer.value.asset)
 }
 
-function downloadAsset(task: ImageStudioTask, asset: ImageStudioAsset) {
+function downloadAsset(task: ImageStudioTask, asset: StoredImageStudioAsset) {
   const url = assetObjectUrls.value[asset.id]
   if (!url) return
   const link = document.createElement('a')
@@ -906,7 +911,7 @@ function downloadAsset(task: ImageStudioTask, asset: ImageStudioAsset) {
   link.remove()
 }
 
-function imageStudioDownloadName(task: ImageStudioTask, asset: ImageStudioAsset) {
+function imageStudioDownloadName(task: ImageStudioTask, asset: StoredImageStudioAsset) {
   const ext = imageStudioExtensionFromMime(asset.mime_type)
   return `${task.task_id}_${String(asset.seq + 1).padStart(2, '0')}_${task.size}${ext}`
 }
@@ -927,7 +932,7 @@ function keyOptionLabel(key: ImageStudioKey) {
   return key.group_name ? `${key.name} - ${key.group_name}` : key.name
 }
 
-function outputAssets(task: ImageStudioTask) {
+function outputAssets(task: LocalImageStudioTask) {
   return (task.assets || []).slice().sort((a, b) => a.seq - b.seq)
 }
 

@@ -915,6 +915,7 @@ export default {
     resetView: 'Reset view',
     close: 'Close',
     loadMore: 'Load more',
+    localHistoryHint: 'History and images are stored locally in this browser',
     delete: 'Delete',
     deleteConfirm: 'Delete this image task?',
     deleteFailed: 'Failed to delete image task',
