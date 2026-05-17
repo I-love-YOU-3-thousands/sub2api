@@ -537,12 +537,9 @@ func normalizeOpenAIImageSizeTier(size string) string {
 	switch normalized {
 	case "", "auto":
 		return "2K"
-	case "1024x1024":
-		return "1K"
-	case "1536x1024", "1024x1536", "1792x1024", "1024x1792", "2048x2048", "2048x1152", "1152x2048":
-		return "2K"
-	case "3840x2160", "2160x3840":
-		return "4K"
+	}
+	if tier, ok := openAIImageKnownSizeTier(normalized); ok {
+		return tier
 	}
 	width, height, ok := parseOpenAIImageSizeDimensions(trimmed)
 	if !ok {
@@ -1342,8 +1339,16 @@ func normalizeOpenAIImageBase64(raw string) string {
 			raw = raw[idx+1:]
 		}
 	}
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimRight(raw, "=") + strings.Repeat("=", (4-len(raw)%4)%4)
+	raw = strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\n', '\r', '\t':
+			return -1
+		default:
+			return r
+		}
+	}, strings.TrimSpace(raw))
+	raw = strings.TrimRight(raw, "=")
+	raw += strings.Repeat("=", (4-len(raw)%4)%4)
 	if raw == "" {
 		return ""
 	}
@@ -1376,11 +1381,16 @@ func walkOpenAIImageInlineAssets(node any, prompt string, out *[]openAIImagePoin
 				break
 			}
 		}
+		imageResultB64 := ""
+		switch firstNonEmptyString(value["type"]) {
+		case "image_generation_call", "image_generation.completed":
+			imageResultB64 = firstNonEmptyString(value["result"])
+		}
 		item := openAIImagePointerInfo{
 			Prompt:      localPrompt,
 			Pointer:     firstNonEmptyString(value["asset_pointer"], value["pointer"]),
 			DownloadURL: firstNonEmptyString(value["download_url"], value["url"], value["image_url"]),
-			B64JSON:     firstNonEmptyString(value["b64_json"], value["base64"], value["image_base64"]),
+			B64JSON:     firstNonEmptyString(value["b64_json"], value["base64"], value["image_base64"], imageResultB64),
 			MimeType:    firstNonEmptyString(value["mime_type"], value["mimeType"], value["content_type"]),
 		}
 		switch {
