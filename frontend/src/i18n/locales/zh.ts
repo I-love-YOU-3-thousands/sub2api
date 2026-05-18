@@ -897,6 +897,19 @@ export default {
     cancelPromptOptimization: '取消',
     promptOptimizationFailed: '优化提示词失败',
     promptOptimizationApplied: '已替换提示词',
+    panels: {
+      studio: '在线生图',
+      gallery: '提示词广场'
+    },
+    gallery: {
+      title: '提示词广场',
+      subtitle: '按场景挑选提示词，查看示例图后可一键填入在线生图',
+      allCategories: '全部分类',
+      itemCount: '{n} 个提示词',
+      viewSample: '查看示例图',
+      usePrompt: '使用',
+      applied: '已填入在线生图'
+    },
     promptPlaceholder: '描述你想生成的画面',
     referenceImage: '参考图',
     ratio: '比例',

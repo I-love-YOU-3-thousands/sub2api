@@ -893,6 +893,19 @@ export default {
     cancelPromptOptimization: 'Cancel',
     promptOptimizationFailed: 'Failed to optimize prompt',
     promptOptimizationApplied: 'Prompt replaced',
+    panels: {
+      studio: 'Image Studio',
+      gallery: 'Prompt Gallery'
+    },
+    gallery: {
+      title: 'Prompt Gallery',
+      subtitle: 'Browse scene-based prompts, preview samples, then fill the image form in one click',
+      allCategories: 'All categories',
+      itemCount: '{n} prompts',
+      viewSample: 'View sample',
+      usePrompt: 'Use',
+      applied: 'Prompt filled into Image Studio'
+    },
     promptPlaceholder: 'Describe the image you want to create',
     referenceImage: 'Reference Image',
     ratio: 'Ratio',

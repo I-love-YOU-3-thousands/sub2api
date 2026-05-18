@@ -135,5 +135,6 @@ docs/*
 .serena/
 .codex/
 frontend/coverage/
+frontend/src/assets/image/
 aicodex
 output/
