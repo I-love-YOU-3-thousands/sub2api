@@ -20,6 +20,8 @@ FROM ${NODE_IMAGE} AS frontend-builder
 
 WORKDIR /app/frontend
 
+# Install pnpm (pinned to v9 to match CI and keep builds reproducible)
+RUN corepack enable && corepack prepare pnpm@9 --activate
 # Install a pinned pnpm version. Newer pnpm releases require interactive
 # build-script approvals, which breaks non-interactive Docker builds.
 ENV PNPM_IGNORE_SCRIPTS=false
