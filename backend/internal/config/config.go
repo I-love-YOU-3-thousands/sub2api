@@ -28,7 +28,7 @@ const (
 
 // DefaultCSPPolicy is the default Content-Security-Policy with nonce support
 // __CSP_NONCE__ will be replaced with actual nonce at request time by the SecurityHeaders middleware
-const DefaultCSPPolicy = "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com https://*.stripe.com https://checkout.airwallex.com https://checkout-demo.airwallex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+const DefaultCSPPolicy = "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com https://*.stripe.com https://checkout.airwallex.com https://checkout-demo.airwallex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 // UMQ（用户消息队列）模式常量
 const (
@@ -78,6 +78,7 @@ type Config struct {
 	Default                 DefaultConfig                 `mapstructure:"default"`
 	RateLimit               RateLimitConfig               `mapstructure:"rate_limit"`
 	Pricing                 PricingConfig                 `mapstructure:"pricing"`
+	ImageStudio             ImageStudioConfig             `mapstructure:"image_studio"`
 	Gateway                 GatewayConfig                 `mapstructure:"gateway"`
 	APIKeyAuth              APIKeyAuthCacheConfig         `mapstructure:"api_key_auth_cache"`
 	SubscriptionCache       SubscriptionCacheConfig       `mapstructure:"subscription_cache"`
@@ -543,6 +544,29 @@ type PricingConfig struct {
 	UpdateIntervalHours int `mapstructure:"update_interval_hours"`
 	// 哈希校验间隔（分钟）
 	HashCheckIntervalMinutes int `mapstructure:"hash_check_interval_minutes"`
+}
+
+type ImageStudioConfig struct {
+	Worker  ImageStudioWorkerConfig  `mapstructure:"worker"`
+	Storage ImageStudioStorageConfig `mapstructure:"storage"`
+}
+
+type ImageStudioWorkerConfig struct {
+	WorkerCount         int `mapstructure:"worker_count"`
+	PollIntervalSeconds int `mapstructure:"poll_interval_seconds"`
+	TaskTimeoutSeconds  int `mapstructure:"task_timeout_seconds"`
+}
+
+type ImageStudioStorageConfig struct {
+	Type            string `mapstructure:"type"`
+	LocalPath       string `mapstructure:"local_path"`
+	Endpoint        string `mapstructure:"endpoint"`
+	Region          string `mapstructure:"region"`
+	Bucket          string `mapstructure:"bucket"`
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	SecretAccessKey string `mapstructure:"secret_access_key"`
+	Prefix          string `mapstructure:"prefix"`
+	ForcePathStyle  bool   `mapstructure:"force_path_style"`
 }
 
 type ServerConfig struct {
@@ -1369,6 +1393,14 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.Log.Environment = strings.TrimSpace(cfg.Log.Environment)
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
 	cfg.Log.Output.FilePath = strings.TrimSpace(cfg.Log.Output.FilePath)
+	cfg.ImageStudio.Storage.Type = strings.ToLower(strings.TrimSpace(cfg.ImageStudio.Storage.Type))
+	cfg.ImageStudio.Storage.LocalPath = strings.TrimSpace(cfg.ImageStudio.Storage.LocalPath)
+	cfg.ImageStudio.Storage.Endpoint = strings.TrimSpace(cfg.ImageStudio.Storage.Endpoint)
+	cfg.ImageStudio.Storage.Region = strings.TrimSpace(cfg.ImageStudio.Storage.Region)
+	cfg.ImageStudio.Storage.Bucket = strings.TrimSpace(cfg.ImageStudio.Storage.Bucket)
+	cfg.ImageStudio.Storage.AccessKeyID = strings.TrimSpace(cfg.ImageStudio.Storage.AccessKeyID)
+	cfg.ImageStudio.Storage.SecretAccessKey = strings.TrimSpace(cfg.ImageStudio.Storage.SecretAccessKey)
+	cfg.ImageStudio.Storage.Prefix = strings.Trim(strings.TrimSpace(cfg.ImageStudio.Storage.Prefix), "/")
 	cfg.Gateway.ForcedCodexInstructionsTemplateFile = strings.TrimSpace(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
 	if cfg.Gateway.ForcedCodexInstructionsTemplateFile != "" {
 		content, err := os.ReadFile(cfg.Gateway.ForcedCodexInstructionsTemplateFile)
@@ -1661,6 +1693,16 @@ func setDefaults() {
 	viper.SetDefault("pricing.update_interval_hours", 24)
 	viper.SetDefault("pricing.hash_check_interval_minutes", 10)
 
+	// Image Studio async generation and independent cache storage.
+	viper.SetDefault("image_studio.worker.worker_count", 2)
+	viper.SetDefault("image_studio.worker.poll_interval_seconds", 3)
+	viper.SetDefault("image_studio.worker.task_timeout_seconds", 900)
+	viper.SetDefault("image_studio.storage.type", "local")
+	viper.SetDefault("image_studio.storage.local_path", "")
+	viper.SetDefault("image_studio.storage.region", "auto")
+	viper.SetDefault("image_studio.storage.prefix", "image-studio")
+	viper.SetDefault("image_studio.storage.force_path_style", true)
+
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
 
@@ -1926,6 +1968,31 @@ func (c *Config) Validate() error {
 	}
 	if c.SubscriptionMaintenance.QueueSize < 0 {
 		return fmt.Errorf("subscription_maintenance.queue_size must be non-negative")
+	}
+	if c.ImageStudio.Worker.WorkerCount < 0 {
+		return fmt.Errorf("image_studio.worker.worker_count must be non-negative")
+	}
+	if c.ImageStudio.Worker.PollIntervalSeconds < 0 {
+		return fmt.Errorf("image_studio.worker.poll_interval_seconds must be non-negative")
+	}
+	if c.ImageStudio.Worker.TaskTimeoutSeconds < 0 {
+		return fmt.Errorf("image_studio.worker.task_timeout_seconds must be non-negative")
+	}
+	switch strings.ToLower(strings.TrimSpace(c.ImageStudio.Storage.Type)) {
+	case "", "local", "s3":
+	default:
+		return fmt.Errorf("image_studio.storage.type must be one of: local/s3")
+	}
+	if strings.EqualFold(c.ImageStudio.Storage.Type, "s3") {
+		if strings.TrimSpace(c.ImageStudio.Storage.Bucket) == "" {
+			return fmt.Errorf("image_studio.storage.bucket is required when storage.type=s3")
+		}
+		if strings.TrimSpace(c.ImageStudio.Storage.AccessKeyID) == "" {
+			return fmt.Errorf("image_studio.storage.access_key_id is required when storage.type=s3")
+		}
+		if strings.TrimSpace(c.ImageStudio.Storage.SecretAccessKey) == "" {
+			return fmt.Errorf("image_studio.storage.secret_access_key is required when storage.type=s3")
+		}
 	}
 
 	// Gemini OAuth 配置校验：client_id 与 client_secret 必须同时设置或同时留空。
