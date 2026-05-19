@@ -733,6 +733,7 @@ func (s *ImageStudioService) executePromptOptimization(ctx context.Context, apiK
 		}
 		forwardCtx := cloneImageStudioGinContext(forwardBody, "application/json", openAIResponsesEndpoint)
 		forwardCtx.Set("api_key", apiKey)
+		prepareImageStudioPromptOptimizationContext(forwardCtx, account)
 		SetOpenAIClientTransport(forwardCtx, OpenAIClientTransportHTTP)
 		start := time.Now()
 		attemptCtx, attemptCancel := context.WithTimeout(ctx, defaultImageStudioPromptAttempt)
@@ -1246,6 +1247,15 @@ func cloneImageStudioGinContext(body []byte, contentType string, endpoint string
 	c.Request = req
 	c.Set("image_studio_recorder", rec)
 	return c
+}
+
+func prepareImageStudioPromptOptimizationContext(c *gin.Context, account *Account) {
+	if c == nil || account == nil || account.Type != AccountTypeOAuth {
+		return
+	}
+	c.Request.Header.Set("User-Agent", codexCLIUserAgent)
+	c.Request.Header.Set("originator", "codex_cli_rs")
+	c.Request.Header.Set("version", codexCLIVersion)
 }
 
 func imageStudioRecorderBody(c *gin.Context) []byte {

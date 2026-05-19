@@ -25,9 +25,11 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+sub2api-image-*.tar.gz
 
 # Node modules (will be installed in container)
 frontend/node_modules/
+frontend/src/assets/image/
 node_modules/
 
 # Go build cache (will be built in container)

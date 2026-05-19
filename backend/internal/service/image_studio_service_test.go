@@ -115,3 +115,30 @@ func TestBuildImageStudioPromptOptimizationRequestBody_IsLightweight(t *testing.
 		t.Fatalf("long prompt compression instruction missing: %q", inputText)
 	}
 }
+
+func TestPrepareImageStudioPromptOptimizationContext_UsesCodexHeadersForOAuth(t *testing.T) {
+	c := cloneImageStudioGinContext([]byte(`{}`), "application/json", openAIResponsesEndpoint)
+	prepareImageStudioPromptOptimizationContext(c, &Account{Type: AccountTypeOAuth})
+
+	if got := c.Request.Header.Get("User-Agent"); got != codexCLIUserAgent {
+		t.Fatalf("User-Agent=%q", got)
+	}
+	if got := c.Request.Header.Get("originator"); got != "codex_cli_rs" {
+		t.Fatalf("originator=%q", got)
+	}
+	if got := c.Request.Header.Get("version"); got != codexCLIVersion {
+		t.Fatalf("version=%q", got)
+	}
+}
+
+func TestPrepareImageStudioPromptOptimizationContext_KeepsAPIKeyHeaders(t *testing.T) {
+	c := cloneImageStudioGinContext([]byte(`{}`), "application/json", openAIResponsesEndpoint)
+	prepareImageStudioPromptOptimizationContext(c, &Account{Type: AccountTypeAPIKey})
+
+	if got := c.Request.Header.Get("User-Agent"); got != "sub2api-image-studio" {
+		t.Fatalf("User-Agent=%q", got)
+	}
+	if got := c.Request.Header.Get("originator"); got != "" {
+		t.Fatalf("originator=%q", got)
+	}
+}
