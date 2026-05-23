@@ -68,28 +68,6 @@ func HasOpsClientBusinessLimited(c *gin.Context) bool {
 	return marked
 }
 
-func MarkOpsClientBusinessLimited(c *gin.Context, reason string) {
-	if c == nil {
-		return
-	}
-	c.Set(OpsClientBusinessLimitedKey, true)
-	if reason = strings.TrimSpace(reason); reason != "" {
-		c.Set(OpsClientBusinessLimitedReasonKey, reason)
-	}
-}
-
-func HasOpsClientBusinessLimited(c *gin.Context) bool {
-	if c == nil {
-		return false
-	}
-	v, ok := c.Get(OpsClientBusinessLimitedKey)
-	if !ok {
-		return false
-	}
-	marked, _ := v.(bool)
-	return marked
-}
-
 // SetOpsUpstreamError is the exported wrapper for setOpsUpstreamError, used by
 // handler-layer code (e.g. failover-exhausted paths) that needs to record the
 // original upstream status code before mapping it to a client-facing code.

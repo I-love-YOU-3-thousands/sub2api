@@ -235,8 +235,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	contentModerationHashCache := repository.NewContentModerationHashCache(redisClient)
 	contentModerationService := service.NewContentModerationService(settingRepository, contentModerationRepository, contentModerationHashCache, groupRepository, userRepository, apiKeyAuthCacheInvalidator, emailService)
 	contentModerationHandler := admin.NewContentModerationHandler(contentModerationService)
-	imageGenerationRepository := repository.NewImageGenerationRepository(client, db)
-	imageStudioService := service.ProvideImageStudioService(imageGenerationRepository, apiKeyService, openAIGatewayService, billingCacheService, subscriptionService, contentModerationService, concurrencyService, imageStudioStorage, configConfig)
 	paymentHandler := admin.NewPaymentHandler(paymentService, paymentConfigService)
 	affiliateHandler := admin.NewAffiliateHandler(affiliateService, adminService)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, paymentHandler, affiliateHandler)
@@ -250,6 +248,12 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	handlerPaymentHandler := handler.NewPaymentHandler(paymentService, paymentConfigService, channelService)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentService, registry)
 	availableChannelHandler := handler.NewAvailableChannelHandler(channelService, apiKeyService, settingService)
+	imageGenerationRepository := repository.NewImageGenerationRepository(client, db)
+	imageStudioStorage, err := service.NewImageStudioStorage(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	imageStudioService := service.ProvideImageStudioService(imageGenerationRepository, apiKeyService, openAIGatewayService, billingCacheService, subscriptionService, contentModerationService, concurrencyService, imageStudioStorage, configConfig)
 	imageStudioHandler := handler.NewImageStudioHandler(imageStudioService)
 	idempotencyCoordinator := service.ProvideIdempotencyCoordinator(idempotencyRepository, configConfig)
 	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(idempotencyRepository, configConfig)
