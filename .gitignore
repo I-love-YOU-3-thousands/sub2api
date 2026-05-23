@@ -1,5 +1,6 @@
 docs/claude-relay-service/
 .codex
+backend/.devdata/
 
 # ===================
 # Go 后端
@@ -134,5 +135,6 @@ docs/*
 .serena/
 .codex/
 frontend/coverage/
+frontend/src/assets/image/
 aicodex
 output/

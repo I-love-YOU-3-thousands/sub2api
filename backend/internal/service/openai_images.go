@@ -532,7 +532,51 @@ func isOpenAINativeImageOption(name string) bool {
 }
 
 func normalizeOpenAIImageSizeTier(size string) string {
-	return NormalizeImageBillingTierOrDefault(size)
+	trimmed := strings.TrimSpace(size)
+	normalized := strings.ToLower(trimmed)
+	switch normalized {
+	case "", "auto":
+		return "2K"
+	}
+	if tier, ok := openAIImageKnownSizeTier(normalized); ok {
+		return tier
+	}
+	width, height, ok := parseOpenAIImageSizeDimensions(trimmed)
+	if !ok {
+		return "2K"
+	}
+	return classifyUnknownOpenAIImageSizeTier(width, height)
+}
+
+const (
+	openAIImage2KMaxPixels = 2560 * 1440
+)
+
+func parseOpenAIImageSizeDimensions(size string) (int, int, bool) {
+	trimmed := strings.TrimSpace(size)
+	parts := strings.Split(strings.ToLower(trimmed), "x")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	width, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return 0, 0, false
+	}
+	height, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return 0, 0, false
+	}
+	if width <= 0 || height <= 0 {
+		return 0, 0, false
+	}
+	return width, height, true
+}
+
+func classifyUnknownOpenAIImageSizeTier(width int, height int) string {
+	if height > 0 && width > openAIImage2KMaxPixels/height {
+		return "4K"
+	}
+	return "2K"
 }
 
 func (s *OpenAIGatewayService) ForwardImages(
@@ -1302,8 +1346,16 @@ func normalizeOpenAIImageBase64(raw string) string {
 			raw = raw[idx+1:]
 		}
 	}
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimRight(raw, "=") + strings.Repeat("=", (4-len(raw)%4)%4)
+	raw = strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\n', '\r', '\t':
+			return -1
+		default:
+			return r
+		}
+	}, strings.TrimSpace(raw))
+	raw = strings.TrimRight(raw, "=")
+	raw += strings.Repeat("=", (4-len(raw)%4)%4)
 	if raw == "" {
 		return ""
 	}
@@ -1336,11 +1388,16 @@ func walkOpenAIImageInlineAssets(node any, prompt string, out *[]openAIImagePoin
 				break
 			}
 		}
+		imageResultB64 := ""
+		switch firstNonEmptyString(value["type"]) {
+		case "image_generation_call", "image_generation.completed":
+			imageResultB64 = firstNonEmptyString(value["result"])
+		}
 		item := openAIImagePointerInfo{
 			Prompt:      localPrompt,
 			Pointer:     firstNonEmptyString(value["asset_pointer"], value["pointer"]),
 			DownloadURL: firstNonEmptyString(value["download_url"], value["url"], value["image_url"]),
-			B64JSON:     firstNonEmptyString(value["b64_json"], value["base64"], value["image_base64"]),
+			B64JSON:     firstNonEmptyString(value["b64_json"], value["base64"], value["image_base64"], imageResultB64),
 			MimeType:    firstNonEmptyString(value["mime_type"], value["mimeType"], value["content_type"]),
 		}
 		switch {

@@ -421,6 +421,22 @@ func ProvideBillingCacheService(
 	return NewBillingCacheService(cache, userRepo, subRepo, apiKeyRepo, rpmCache, rateRepo, cfg)
 }
 
+func ProvideImageStudioService(
+	repo ImageGenerationRepository,
+	apiKeyService *APIKeyService,
+	gatewayService *OpenAIGatewayService,
+	billingCacheService *BillingCacheService,
+	subscriptionService *SubscriptionService,
+	contentModerationService *ContentModerationService,
+	concurrencyService *ConcurrencyService,
+	storage ImageStudioStorage,
+	cfg *config.Config,
+) *ImageStudioService {
+	svc := NewImageStudioService(repo, apiKeyService, gatewayService, billingCacheService, subscriptionService, contentModerationService, concurrencyService, storage, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideAPIKeyService wires APIKeyService and connects rate-limit cache invalidation.
 func ProvideAPIKeyService(
 	apiKeyRepo APIKeyRepository,

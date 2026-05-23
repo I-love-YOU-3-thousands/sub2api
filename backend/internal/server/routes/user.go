@@ -64,6 +64,18 @@ func RegisterUserRoutes(
 			keys.DELETE("/:id", h.APIKey.Delete)
 		}
 
+		// 在线异步生图
+		imageStudio := authenticated.Group("/image-studio")
+		{
+			imageStudio.GET("/keys", h.ImageStudio.ListKeys)
+			imageStudio.POST("/prompt/optimize", h.ImageStudio.OptimizePrompt)
+			imageStudio.POST("/tasks", h.ImageStudio.CreateTask)
+			imageStudio.GET("/tasks", h.ImageStudio.ListTasks)
+			imageStudio.GET("/tasks/:task_id", h.ImageStudio.GetTask)
+			imageStudio.DELETE("/tasks/:task_id", h.ImageStudio.DeleteTask)
+			imageStudio.GET("/assets/:asset_id/content", h.ImageStudio.GetAssetContent)
+		}
+
 		// 用户可用分组（非管理员接口）
 		groups := authenticated.Group("/groups")
 		{

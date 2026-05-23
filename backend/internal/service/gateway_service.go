@@ -8278,9 +8278,21 @@ func detachStreamUpstreamContext(ctx context.Context, stream bool) (context.Cont
 	return context.WithoutCancel(ctx), func() {}
 }
 
+type attachUpstreamContextKey struct{}
+
+func withAttachedUpstreamContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, attachUpstreamContextKey{}, true)
+}
+
 func detachUpstreamContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if ctx == nil {
 		return context.Background(), func() {}
+	}
+	if attached, _ := ctx.Value(attachUpstreamContextKey{}).(bool); attached {
+		return ctx, func() {}
 	}
 	return context.WithoutCancel(ctx), func() {}
 }
