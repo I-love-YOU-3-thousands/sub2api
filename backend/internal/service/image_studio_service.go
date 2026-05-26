@@ -381,7 +381,7 @@ func (s *ImageStudioService) OptimizePrompt(ctx context.Context, input ImageStud
 		}
 	}
 	if s.billingCacheService != nil {
-		if err := s.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+		if err := s.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription, QuotaPlatform(ctx, apiKey)); err != nil {
 			return nil, err
 		}
 	}
@@ -511,7 +511,7 @@ func (s *ImageStudioService) executeTask(ctx context.Context, task *ImageGenerat
 		}
 	}
 	if s.billingCacheService != nil {
-		if err := s.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+		if err := s.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription, QuotaPlatform(ctx, apiKey)); err != nil {
 			return err
 		}
 	}

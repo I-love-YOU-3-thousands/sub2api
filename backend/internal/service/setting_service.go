@@ -268,13 +268,6 @@ var (
 		grantOnFirstBind: SettingKeyAuthSourceDefaultDingTalkGrantOnFirstBind,
 		platformQuotas:   SettingKeyAuthSourcePlatformQuotas("dingtalk"),
 	}
-	dingTalkAuthSourceDefaultKeys = authSourceDefaultKeySet{
-		balance:          SettingKeyAuthSourceDefaultDingTalkBalance,
-		concurrency:      SettingKeyAuthSourceDefaultDingTalkConcurrency,
-		subscriptions:    SettingKeyAuthSourceDefaultDingTalkSubscriptions,
-		grantOnSignup:    SettingKeyAuthSourceDefaultDingTalkGrantOnSignup,
-		grantOnFirstBind: SettingKeyAuthSourceDefaultDingTalkGrantOnFirstBind,
-	}
 )
 
 const (
