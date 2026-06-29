@@ -256,6 +256,9 @@ func provideCleanup(
 			{"ImageStudioService", func() error {
 				if imageStudio != nil {
 					imageStudio.Stop()
+				}
+				return nil
+			}},
 			{"UserPlatformQuotaUsageFlusher", func() error {
 				if quotaFlusher != nil {
 					quotaFlusher.Stop()
