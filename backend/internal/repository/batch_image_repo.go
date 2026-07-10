@@ -811,10 +811,6 @@ VALUES ($1, $2, $3)`, batchID, eventType, payloadArg)
 	return err
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
 const batchImageJobColumns = `
 id, batch_id, user_id, api_key_id, account_id, provider, model, task_name, parent_batch_id, status,
 provider_job_name, provider_input_ref, provider_output_ref, gcs_input_uri, gcs_output_uri,
