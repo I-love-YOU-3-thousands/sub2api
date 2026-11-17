@@ -100,7 +100,7 @@
             </div>
             <div>
               <label class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.customMethodDisplayName') }}</label>
-              <input v-model="method.displayName" type="text" class="input mt-0.5" placeholder="信用卡" />
+              <input v-model="method.displayName" type="text" class="input mt-0.5" :placeholder="t('admin.settings.payment.customMethodDisplayNamePlaceholder')" />
             </div>
             <button
               type="button"
@@ -759,7 +759,7 @@ function validateEasyPayCustomMethods(): string | null {
     if (!/^[a-z0-9_-]+$/.test(method.type)) {
       return t('admin.settings.payment.validationEasyPayCustomMethodTypeInvalid')
     }
-    if (!/^[a-z0-9_-]+$/.test(method.upstreamType)) {
+    if (!/^[a-z0-9_.-]+$/.test(method.upstreamType)) {
       return t('admin.settings.payment.validationEasyPayCustomMethodUpstreamTypeInvalid')
     }
     if ((PROVIDER_SUPPORTED_TYPES.easypay || []).includes(method.type)) {

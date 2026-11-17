@@ -662,17 +662,23 @@ func (s *ImageStudioService) executeOneImage(ctx context.Context, task *ImageGen
 		if result != nil && result.Duration == 0 {
 			result.Duration = duration
 		}
+		scheduleModel := imageStudioAccountScheduleModel(
+			forwardCtx,
+			account,
+			resultPromptOptimizationMappedModel(channelMapping, parsed.Model),
+			result,
+		)
 		outputs, extractErr := extractImageStudioOutputs(ctx, respBody)
 		if extractErr != nil && err == nil {
 			err = extractErr
 		}
 		if err == nil || len(outputs) > 0 || extractErr != nil {
-			s.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, resultFirstToken(result))
+			s.gatewayService.ReportOpenAIAccountScheduleResult(account, scheduleModel, true, resultFirstToken(result))
 			return outputs, result, account, respBody, endpoint, body, err
 		}
 		var failoverErr *UpstreamFailoverError
 		if errors.As(err, &failoverErr) {
-			s.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
+			s.gatewayService.ReportOpenAIAccountScheduleResult(account, scheduleModel, false, nil, err)
 			failed[account.ID] = struct{}{}
 			lastErr = err
 			continue
@@ -756,10 +762,16 @@ func (s *ImageStudioService) executePromptOptimization(ctx context.Context, apiK
 		if result != nil && result.Duration == 0 {
 			result.Duration = duration
 		}
+		scheduleModel := imageStudioAccountScheduleModel(
+			forwardCtx,
+			account,
+			resultPromptOptimizationMappedModel(channelMapping, model),
+			result,
+		)
 		respBody := imageStudioRecorderBody(forwardCtx)
 		output := extractImageStudioPromptText(respBody)
 		if err == nil && strings.TrimSpace(output) != "" {
-			s.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, resultFirstToken(result))
+			s.gatewayService.ReportOpenAIAccountScheduleResult(account, scheduleModel, true, resultFirstToken(result))
 			loggerLegacyImageStudio(
 				"prompt optimization attempt succeeded: attempt=%d account_id=%d duration_ms=%d model=%s mapped_model=%s",
 				attempt+1,
@@ -783,7 +795,7 @@ func (s *ImageStudioService) executePromptOptimization(ctx context.Context, apiK
 			err,
 		)
 		if isImageStudioDeadlineError(err) || errors.Is(attemptCtx.Err(), context.DeadlineExceeded) {
-			s.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
+			s.gatewayService.ReportOpenAIAccountScheduleResult(account, scheduleModel, false, nil, err)
 			failed[account.ID] = struct{}{}
 			lastErr = err
 			if ctx.Err() != nil {
@@ -793,7 +805,7 @@ func (s *ImageStudioService) executePromptOptimization(ctx context.Context, apiK
 		}
 		var failoverErr *UpstreamFailoverError
 		if errors.As(err, &failoverErr) {
-			s.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
+			s.gatewayService.ReportOpenAIAccountScheduleResult(account, scheduleModel, false, nil, err)
 			failed[account.ID] = struct{}{}
 			lastErr = err
 			continue
@@ -814,6 +826,22 @@ func resultPromptOptimizationMappedModel(channelMapping ChannelMappingResult, fa
 		return channelMapping.MappedModel
 	}
 	return fallback
+}
+
+func imageStudioAccountScheduleModel(c *gin.Context, account *Account, requestedModel string, result *OpenAIForwardResult) string {
+	if result != nil {
+		if actual := strings.TrimSpace(result.UpstreamModel); actual != "" {
+			return actual
+		}
+	}
+	if c != nil {
+		if value, ok := c.Get(OpsUpstreamModelKey); ok {
+			if actual, ok := value.(string); ok && strings.TrimSpace(actual) != "" {
+				return strings.TrimSpace(actual)
+			}
+		}
+	}
+	return canonicalOpenAIAccountSchedulingModel(account, requestedModel)
 }
 
 func (s *ImageStudioService) selectPromptOptimizationAccount(ctx context.Context, groupID *int64, sessionHash string, model string, failed map[int64]struct{}) (*AccountSelectionResult, error) {
